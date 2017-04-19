@@ -60,30 +60,51 @@ gulp.task('new', ['git'], function (done) {
     throw new Error('A project already exists! Please remove it first.');
   }
 
-  // the default project name is derived from the project root path
-  inquirer.prompt({ name: 'projectName', message: 'Project name:', default: path.basename(base) }, function (answer) {
-    project.projectName = answer.projectName;
+  showQuickPick('Which build tool:', buildToolIds, function (buildtool) {
+    // the selected build tool
+    project.buildtool = buildtool;
 
-    showQuickPick('Which build tool:', buildToolIds, function (buildtool) {
-      // the selected build tool
-      project.buildtool = buildtool;
+    var templateIds = metadata.filter(function (el) {
+      return el.buildtool === buildtool;
+    }).map(function (el) {
+      return el.id;
+    });
 
-      var templateIds = metadata.filter(function (el) {
-        return el.buildtool === buildtool;
-      }).map(function (el) {
-        return el.id;
-      });
+    showQuickPick('Which language:', templateIds, function (template) {
+      // the selected template
+      project.template = template;
+      // set a property with the used language
+      project[template] = true;
 
-      showQuickPick('Which language:', templateIds, function (template) {
-        // the selected template
-        project.template = template;
-        // set a property with the used language
-        project[template] = true;
+      // locate the selected metadata and add to the project object
+      project.metadata = metadata.filter(function (el) {
+        return el.buildtool === project.buildtool && el.id === template;
+      })[0];
 
-        // locate the selected metadata and add to the project object
-        project.metadata = metadata.filter(function (el) {
-          return el.buildtool === project.buildtool && el.id === template;
-        })[0];
+      var defaultName = path.basename(base);
+      var javaNamingRequired = (template === 'java' || template === 'groovy' || template === 'kotlin');
+
+      if (javaNamingRequired) {
+        defaultName = path.basename(base).split(/[-_ ]/).reverse().join(".");
+      }
+
+      var promptHash = {
+        name: 'projectName',
+        message: 'Project Name:',
+        type: 'input',
+        default: defaultName,
+        validate: function(input) {
+          if (input.match(/-/)) {
+            return 'Hyphens are not allowed in package names';
+          } else {
+            return true;
+          }
+        }
+      };
+
+      // the default project name is derived from the project root path
+      inquirer.prompt(promptHash, function (answer) {
+        project.projectName = answer.projectName;
 
         // set the correct main verticle
         project.mainVerticle = project.metadata.main.replace('{package}', project.projectName || '');
